@@ -2,7 +2,7 @@
 // määritetään aukioloajat
 define( "STORE_OPENING_HOURS", array(
     "Mon" => "09:00-20:00",
-    "Tue" => "09:00-20:00",
+    "Tue" => "09:00-11:00,12:00-15:00", // tiistaina auki 9-11 ja 12-15
     "Wed" => "09:00-20:00",
     "Thu" => "09:00-20:00",
     "Fri" => "09:00-20:00",
@@ -27,17 +27,27 @@ function opening_hours( $day ) {
         return false;
     }
 
-    $hours = explode( "-", $opening_hours );
+    $opening_hours = explode( ",", $opening_hours );
     
-    // lisätään etunollat, jotta aikojen vertailu toimii oikein
-    $from = str_pad( $hours[0], 5, "0", STR_PAD_LEFT );
-    $to   = str_pad( $hours[1], 5, "0", STR_PAD_LEFT );
+    $hour_list = [];
+    
+    // käydään läpi päivän kaikki aukioloajat
+    foreach( $opening_hours as $time_slot ) {
+        $hours = explode( "-", trim( $time_slot ) );
 
-    return array(
-        'day'  => $day,
-        'from' => $from,
-        'to'   => $to,
-    );
+        // lisätään etunollat, jotta aikojen vertailu toimii oikein
+        $from = str_pad( $hours[0], 5, "0", STR_PAD_LEFT );
+        $to   = str_pad( $hours[1], 5, "0", STR_PAD_LEFT );
+
+        $hour_list[] = array(
+            'day'  => $day,
+            'from' => $from,
+            'to'   => $to,
+        );
+    }
+    
+    // palautetaan lista päivän aukioloajoista
+    return $hour_list;
 }
 
 // palauttaa aukioloajan seuraavalta päivältä, kun kauppa on auki
@@ -74,15 +84,24 @@ function store_is_open( $timestamp = null ) {
     }
     
     $day = date( "D", $timestamp );	
-    $opening = opening_hours( $day );
+    $opening_hours = opening_hours( $day );
 
-    if( false === $opening ) {
+    if( false === $opening_hours ) {
         return false;
     }
-
-    $time = date( "H:i", $timestamp );
-
-    return ( $time >= $opening['from'] && $time <= $opening['to'] );
+    
+    // jos nykyinen kellonaika on jonkin aukioloajan sisällä, palautetaan true
+    foreach( $opening_hours as $time_slot ) {
+        $time = date( "H:i", $timestamp );
+        $is_open = ( $time >= $time_slot['from'] && $time <= $time_slot['to'] );
+        
+        if( $is_open ) {
+            return true;
+        }
+    }
+    
+    // jos aukioloaikoja ei löytynyt, palautetaan false
+    return false;
 }
 
 // estä ostaminen kun kauppa on suljettu
@@ -126,15 +145,34 @@ function shop_opening_hours_notice() {
                 $notice    = __( "Verkkokauppamme on suljettu" );	
             } else {
                 $notice    = __( "Verkkokauppamme aukeaa %s klo %s" );
-                $day_name  = $day_names[$open_next['day']];
-                $notice    = sprintf( $notice, $day_name, $open_next['from'] );
+                $day_name  = $day_names[$open_next[0]['day']];
+                $notice    = sprintf( $notice, $day_name, $open_next[0]['from'] );
             }
 
             wc_add_notice( $notice, 'error' );
         } else {
+            $next_open_time = "";
+            $open_times_readable = array();
+            
+            // haetaan tämän päivän seuraava aukioloaika
+            foreach( $open_today as $time_slot ) {
+                if( ! $next_open_time && $time_slot['from'] > date( "H:i" ) ) {
+                    $next_open_time = $time_slot['from'];
+                }
+                
+                // tehdään selkokielinen lista aukioloajoista
+                $open_times_readable[] = $time_slot['from'] . " - " . $time_slot['to'];
+            }
+            
+            // erotellaan aukioloajat pilkulla
+            $open_times_readable = implode( ", ", $open_times_readable );
+            
+            // lisätään viimeisen pilkun tilalle "ja"
+            $open_times_readable = preg_replace( '/, ([0-9: -]+)$/', ' ja $1', $open_times_readable );
+            
             // jos kauppa ei ole tänään vielä auki, kerrotaan, milloin se aukeaa
-            $notice = __( "Verkkokauppamme aukeaa kello %s - Voit tilata tuotteita verkkokaupastamme klo %s - %s" );
-            $notice = sprintf( $notice, $open_today['from'], $open_today['from'], $open_today['to'] );
+            $notice = __( "Verkkokauppamme aukeaa kello %s - Voit tilata tuotteita verkkokaupastamme klo %s" );
+            $notice = sprintf( $notice, $next_open_time, $open_times_readable );
 
             wc_add_notice( $notice, 'error' );
         }
