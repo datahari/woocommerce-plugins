@@ -1,14 +1,22 @@
 <?php
-// määritetään aukioloajat
-define( "STORE_OPENING_HOURS", array(
-    "Mon" => "09:00-20:00",
-    "Tue" => "09:00-11:00,12:00-15:00", // tiistaina auki 9-11 ja 12-15
-    "Wed" => "09:00-20:00",
-    "Thu" => "09:00-20:00",
-    "Fri" => "09:00-20:00",
-    "Sat" => "14:00-20:00",
-    "Sun" => false, // suljettu sunnuntaina
-) );
+function store_opening_hours( $day = null ) {
+    // määritetään aukioloajat
+    $hours = array(
+        "Mon" => "09:00-20:00",
+        "Tue" => "09:00-11:00,12:00-15:00", // tiistaina auki 9-11 ja 12-15
+        "Wed" => "09:00-20:00",
+        "Thu" => "09:00-20:00",
+        "Fri" => "09:00-20:00",
+        "Sat" => "14:00-20:00",
+        "Sun" => false, // suljettu sunnuntaina
+    );
+    
+    if( null !== $day ) {
+        return isset( $hours[$day] ) ? $hours[$day] : false;
+    }
+    
+    return $hours;
+}
 
 // asetetaan aikavyöhyke (http://php.net/manual/en/timezones.php)
 date_default_timezone_set( 'Europe/Helsinki' );
@@ -17,11 +25,7 @@ date_default_timezone_set( 'Europe/Helsinki' );
 // jos kauppa ei ole kyseisenä päivänä ollenkaan auki
 // esim. opening_hours( "Tue" );
 function opening_hours( $day ) {
-    if( ! isset( STORE_OPENING_HOURS[$day] ) ) {
-        return false;
-    }
-
-    $opening_hours = STORE_OPENING_HOURS[$day];
+    $opening_hours = store_opening_hours( $day );
 
     if( false === $opening_hours ) {
         return false;
@@ -56,7 +60,7 @@ function next_opening_hours( $timestamp = null ) {
         $timestamp = time();
     }
     
-    $opening_hours = STORE_OPENING_HOURS;
+    $opening_hours = store_opening_hours();
 
     // haetaan huomisen viikonpäivä
     $tomorrow = strtotime( "tomorrow", $timestamp );
